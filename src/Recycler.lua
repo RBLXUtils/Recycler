@@ -45,7 +45,7 @@ function Recycler:GetObject()
 	do
 		local index, object = next(_garbage)
 
-		if object then
+		if object ~= nil then
 			_garbage[index] = nil
 
 			local onDestroyed = self._onDestroyed
