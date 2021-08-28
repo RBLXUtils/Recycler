@@ -57,7 +57,7 @@ function Recycler:GetObject()
 		end
 	end
 
-	local onNewObject = self.onNewObject
+	local onNewObject = self._onNewObject
 	if onNewObject then
 		return onNewObject()
 	end
