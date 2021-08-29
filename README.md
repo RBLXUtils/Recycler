@@ -1,7 +1,7 @@
-<a href="Releases">
-    <img alt="Releases"src="https://img.shields.io/github/downloads/LucasMZReal/Recycler/total">
+<a href="https://img.shields.io/github/downloads/LucasMZReal/Recycler/releases">
+    <img alt="Releases"src="https://img.shields.io/github/downloads/LucasMZReal/Recycler/releases">
 </a>
-<a href="Downloads">
+<a href="https://img.shields.io/github/v/release/LucasMZReal/Recycler">
     <img alt="Downloads"src="https://img.shields.io/github/v/release/LucasMZReal/Recycler">
 </a>
 
