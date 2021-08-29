@@ -1,8 +1,8 @@
 <a href="https://github.com/LucasMZReal/Recycler/releases">
-    <img alt="Releases"src="https://img.shields.io/github/downloads/LucasMZReal/Recycler/total">
+    <img alt="" src="https://img.shields.io/github/v/release/LucasMZReal/Recycler">
 </a>
 <a href="https://github.com/LucasMZReal/Recycler/releases">
-    <img alt="Downloads"src="https://img.shields.io/github/v/release/LucasMZReal/Recycler">
+    <img alt="" src="https://img.shields.io/github/downloads/LucasMZReal/Recycler/total">
 </a>
 
 # Recycler
