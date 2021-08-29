@@ -1,6 +1,9 @@
-![GitHub all releases](https://img.shields.io/github/downloads/LucasMZReal/Recycler/total) ![GitHub release (latest by date)](https://img.shields.io/github/v/release/LucasMZReal/Recycler)
-
-###
+<a href="Releases">
+    <img alt="Releases"src="https://img.shields.io/github/downloads/LucasMZReal/Recycler/total">
+</a>
+<a href="Downloads">
+    <img alt="Downloads"src="https://img.shields.io/github/v/release/LucasMZReal/Recycler">
+</a>
 
 # Recycler
 Recycler is a memory management tool which allows you to re-use pieces of memory which aren't needed anymore, but haven't been garbage collected yet.
