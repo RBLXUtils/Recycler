@@ -4,4 +4,4 @@ Recycler is a memory management tool which allows you to re-use pieces of memory
 Recycling such objects is important for memory management, especially when you have multiple objects being created at all times,
 not only is it faster, but it also saves up memory usage in the long run!
 
-## [Wiki](https://github.com/LucasMZReal/Recycler/wiki)
+## [Go to Wiki!](https://github.com/LucasMZReal/Recycler/wiki)
