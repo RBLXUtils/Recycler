@@ -1,6 +1,15 @@
 local Recycler = {}
 Recycler.__index = Recycler
 
+local function assert(condition, errorMsg)
+	-- Custom assert which errors in the function above
+	-- the one that assert was called
+
+	if not condition then
+		error(errorMsg, 3)
+	end
+end
+
 local WeakMetatable = {__mode = 'v'}
 
 function Recycler.new()
@@ -48,19 +57,104 @@ function Recycler:GetObject()
 	-- No garbage found:
 	local onNewObject = self._onNewObject
 	if onNewObject then
-		return onNewObject()
+		local object = onNewObject()
+		return object
 	end
 end
 
-function Recycler:AddToGarbage(item)
+function Recycler:GetObjects(objectCount: number, createNewObjects: boolean?)
+	assert(
+		typeof(objectCount) == 'number',
+		"You must specify an object count on :GetObjects!"
+	)
+	createNewObjects = createNewObjects == nil and true or createNewObjects
+
+	if self._destroyed then
+		return
+	end
+
+	local _garbage = self._garbage
+	local _strong_garbage = self._strong_garbage
+
+	local onDestroyed = self._onDestroyed
+	local onNewObject = self._onNewObject
+
+	local objects = table.create(onNewObject and objectCount or 1)
+	local objectsLeft = objectCount
+
+	do
+		-- Check for strong garbage to re-use:
+
+		local index, object = next(_strong_garbage)
+		while (object ~= nil) and (objectsLeft >= 1) do
+			_strong_garbage[index] = nil
+
+			if onDestroyed then
+				onDestroyed(object)
+			end
+			
+			objectsLeft -= 1
+			table.insert(objects, object)
+			
+			index, object = next(_strong_garbage)
+		end
+	end
+
+	do	
+		-- Check for weak garbage to re-use:
+
+		local index, object = next(_garbage)
+		while (object ~= nil) and (objectsLeft >= 1) do
+			_garbage[index] = nil
+
+			if onDestroyed then
+				onDestroyed(object)
+			end
+			
+			objectsLeft -= 1
+			table.insert(objects, object)
+			
+			index, object = next(_garbage)
+		end
+	end
+
+	if onNewObject and createNewObjects then
+		for _ = 1, objectsLeft do
+			local object = onNewObject()
+
+			table.insert(objects, object)
+		end
+	end
+
+	return objects
+end
+
+function Recycler:AddToGarbage(...)
 	if self._destroyed then
 		return self
 	end
 
-	table.insert(
-		self._garbage,
-		item
-	)
+	local _garbage = self._garbage
+
+	local argCount = select("#", ...)
+	if argCount == 0 then
+		error("You need to add at least one item!", 2)
+	end
+
+	if argCount == 1 then
+		table.insert(
+			_garbage,
+			...
+		)
+	else
+		local args = {...}
+		for _, item in ipairs(args) do
+			table.insert(
+				_garbage,
+				item
+			)
+		end
+	end
 
 	return self
 end
@@ -68,15 +162,32 @@ end
 -- :AddToStrongGarbage keeps whatever item you passed through it, on a
 -- table which isn't weak, it will never be garbage collected, unless you clear
 -- the recycler, or if :GetObject returns an item from strong garbage.
-function Recycler:AddToStrongGarbage(item)
+function Recycler:AddToStrongGarbage(...)
 	if self._destroyed then
 		return self
 	end
 
-	table.insert(
-		self._strong_garbage,
-		item
-	)
+	local _strong_garbage = self._strong_garbage
+
+	local argCount = select("#", ...)
+	if argCount == 0 then
+		error("You need to add at least one item!", 2)
+	end
+
+	if argCount == 1 then
+		table.insert(
+			_strong_garbage,
+			...
+		)
+	else
+		local args = {...}
+		for _, item in ipairs(args) do
+			table.insert(
+				_strong_garbage,
+				item
+			)
+		end
+	end
 
 	return self
 end
@@ -84,7 +195,7 @@ end
 -- :OnDestroyed sets the handler which will be called whenever there is some garbage you can re-use,
 -- This allows it to reset parts of an item, to default, for instance, before
 -- such object is returned by :GetObject!
-function Recycler:OnDestroyed(handler)	
+function Recycler:OnDestroyed(handler: (any) -> ())
 	assert(
 		typeof(handler) == 'function',
 		":OnDestroyed must be called with a function"
@@ -101,7 +212,7 @@ end
 
 -- :OnNewObject sets the handler which will be called whenever there is no garbage to re-use,
 -- Whatever it returns will be returned on :GetObject!
-function Recycler:OnNewObject(handler)
+function Recycler:OnNewObject(handler: () -> (any))
 	assert(
 		typeof(handler) == 'function',
 		":OnNewObject must be called with a function"
