@@ -225,4 +225,8 @@ function Recycler:Destroy()
 	return self
 end
 
+export type Class = typeof(
+	setmetatable({}, Recycler)
+)
+
 return Recycler
