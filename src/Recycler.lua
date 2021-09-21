@@ -1,51 +1,40 @@
 local Recycler = {}
 Recycler.__index = Recycler
 
-local function assert(condition, errorMsg)
-	-- Custom assert which errors in the function above
-	-- the one that assert was called
-
-	if not condition then
-		error(errorMsg, 3)
-	end
-end
-
-local WeakMetatable = {__mode = 'v'}
+local WeakMetatable = {__mode = "v"}
 
 function Recycler.new()
 	return setmetatable({
 		_destroyed = false,
-		_garbage = setmetatable({}, WeakMetatable),
-		_strong_garbage = {},
+		_recycled = {
+			-- Recycler respects this order:
+
+			{}, -- strong objects (won't get g-collected)
+			setmetatable(
+				{},  -- weak objects (can still be g-collected)
+				WeakMetatable
+			)
+		},
+
 		_onDestroyed = nil,
-		_onNewObject = nil
+		_onNewObject = nil,
 	}, Recycler)
 end
 
 function Recycler:GetObject()
 	if self._destroyed then
-		return
+		return nil
 	end
 
-	local _strong_garbage = self._strong_garbage
-	local _garbage = self._garbage
-	do
-		local index, object = next(_strong_garbage)
+	local onNewObject = self._onNewObject
+	local onDestroyed = self._onDestroyed
+
+	for _, storage in ipairs(self._recycled) do
+		local index, object = next(storage)
 
 		if object ~= nil then
-			-- There is a strong reference object we can use!
-			_strong_garbage[index] = nil
-		else
-			index, object = next(_garbage)
+			storage[index] = nil
 
-			if object ~= nil then
-				-- There is a weak reference object we can use!
-				_garbage[index] = nil
-			end
-		end
-
-		if object ~= nil then
-			local onDestroyed = self._onDestroyed
 			if onDestroyed then
 				onDestroyed(object)
 			end
@@ -53,28 +42,29 @@ function Recycler:GetObject()
 			return object
 		end
 	end
-	
+
 	-- No garbage found:
-	local onNewObject = self._onNewObject
 	if onNewObject then
-		local object = onNewObject()
-		return object
+		return onNewObject()
 	end
 end
 
-function Recycler:GetObjects(objectCount: number, createNewObjects: boolean?)
+function Recycler:GetObjects(
+	objectCount: number,
+	createNewObjects: boolean?
+)
 	assert(
-		typeof(objectCount) == 'number',
+		typeof(objectCount) == "number",
 		"You must specify an object count on :GetObjects!"
 	)
-	createNewObjects = createNewObjects == nil and true or createNewObjects
+
+	createNewObjects = createNewObjects == nil
+		and true
+		or createNewObjects
 
 	if self._destroyed then
 		return
 	end
-
-	local _garbage = self._garbage
-	local _strong_garbage = self._strong_garbage
 
 	local onDestroyed = self._onDestroyed
 	local onNewObject = self._onNewObject
@@ -82,39 +72,17 @@ function Recycler:GetObjects(objectCount: number, createNewObjects: boolean?)
 	local objects = table.create(onNewObject and objectCount or 1)
 	local objectsLeft = objectCount
 
-	do
-		-- Check for strong garbage to re-use:
+	for _, storage in ipairs(self._recycled) do
+		local index, object = next(storage)
 
-		local index, object = next(_strong_garbage)
-		while (object ~= nil) and (objectsLeft >= 1) do
-			_strong_garbage[index] = nil
-
-			if onDestroyed then
-				onDestroyed(object)
-			end
-			
-			objectsLeft -= 1
-			table.insert(objects, object)
-			
-			index, object = next(_strong_garbage)
-		end
-	end
-
-	do	
-		-- Check for weak garbage to re-use:
-
-		local index, object = next(_garbage)
-		while (object ~= nil) and (objectsLeft >= 1) do
-			_garbage[index] = nil
+		while objectsLeft > 0 and object ~= nil do
+			storage[index] = nil
 
 			if onDestroyed then
 				onDestroyed(object)
 			end
-			
-			objectsLeft -= 1
+
 			table.insert(objects, object)
-			
-			index, object = next(_garbage)
 		end
 	end
 
@@ -122,20 +90,16 @@ function Recycler:GetObjects(objectCount: number, createNewObjects: boolean?)
 		for _ = 1, objectsLeft do
 			local object = onNewObject()
 
-			table.insert(objects, object)
+			if object then
+				table.insert(objects, object)
+			end
 		end
 	end
 
 	return objects
 end
 
-function Recycler:AddToGarbage(...)
-	if self._destroyed then
-		return self
-	end
-
-	local _garbage = self._garbage
-
+local function AddToGarbage(self, binId, ...)
 	local argCount = select("#", ...)
 	if argCount == 0 then
 		error("You need to add at least one item!", 2)
@@ -143,18 +107,26 @@ function Recycler:AddToGarbage(...)
 
 	if argCount == 1 then
 		table.insert(
-			_garbage,
+			self._recycled[binId],
 			...
 		)
 	else
 		local args = {...}
 		for _, item in ipairs(args) do
 			table.insert(
-				_garbage,
+				self._recycled[binId],
 				item
 			)
 		end
 	end
+end
+
+function Recycler:AddToGarbage(...)
+	if self._destroyed then
+		return self
+	end
+
+	AddToGarbage(self, 2, ...)
 
 	return self
 end
@@ -167,27 +139,7 @@ function Recycler:AddToStrongGarbage(...)
 		return self
 	end
 
-	local _strong_garbage = self._strong_garbage
-
-	local argCount = select("#", ...)
-	if argCount == 0 then
-		error("You need to add at least one item!", 2)
-	end
-
-	if argCount == 1 then
-		table.insert(
-			_strong_garbage,
-			...
-		)
-	else
-		local args = {...}
-		for _, item in ipairs(args) do
-			table.insert(
-				_strong_garbage,
-				item
-			)
-		end
-	end
+	AddToGarbage(self, 1, ...)
 
 	return self
 end
@@ -195,9 +147,11 @@ end
 -- :OnDestroyed sets the handler which will be called whenever there is some garbage you can re-use,
 -- This allows it to reset parts of an item, to default, for instance, before
 -- such object is returned by :GetObject!
-function Recycler:OnDestroyed(handler: (any) -> ())
+function Recycler:OnDestroyed(
+	handler: (object: any) -> ()
+)
 	assert(
-		typeof(handler) == 'function',
+		typeof(handler) == "function",
 		":OnDestroyed must be called with a function"
 	)
 
@@ -212,9 +166,11 @@ end
 
 -- :OnNewObject sets the handler which will be called whenever there is no garbage to re-use,
 -- Whatever it returns will be returned on :GetObject!
-function Recycler:OnNewObject(handler: () -> (any))
+function Recycler:OnNewObject(
+	handler: () -> (any)
+)
 	assert(
-		typeof(handler) == 'function',
+		typeof(handler) == "function",
 		":OnNewObject must be called with a function"
 	)
 
@@ -229,13 +185,24 @@ end
 
 -- :Clear only clears any references for garbage that a recycler has.
 -- The recycler object can still be used after this was called on it.
-function Recycler:Clear()
+function Recycler:Clear(dontReUseTable: boolean?)
 	if self._destroyed then
 		return self
 	end
 
-	table.clear(self._garbage)
-	table.clear(self._strong_garbage)
+	if dontReUseTable then
+		self._recycled = {
+			{},
+			setmetatable(
+				{},
+				WeakMetatable
+			)
+		}
+	else
+		for _, storage in ipairs(self._recycled) do
+			table.clear(storage)
+		end
+	end
 
 	return self
 end
@@ -251,8 +218,7 @@ function Recycler:Destroy()
 
 	self._destroyed = true
 
-	self._garbage = nil
-	self._strong_garbage = nil
+	self._recycled = nil
 	self._onDestroyed = nil
 	self._onNewObject = nil
 
