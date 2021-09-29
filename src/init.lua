@@ -3,7 +3,8 @@ Recycler.__index = Recycler
 
 local WeakMetatable = {__mode = "v"}
 
-function Recycler.new()
+-- Creates a Recycler object
+function Recycler.new(): Class
 	return setmetatable({
 		_destroyed = false,
 		_recycled = {
@@ -21,7 +22,10 @@ function Recycler.new()
 	}, Recycler)
 end
 
-function Recycler:GetObject()
+-- :GetObject tries to get a single object from the recycling bin,
+-- if nothing is found it will check for if you have a :OnNewObject
+-- handler, and if so, it will get the object from that and return it to you.
+function Recycler:GetObject(): any
 	if self._destroyed then
 		return nil
 	end
@@ -49,10 +53,11 @@ function Recycler:GetObject()
 	end
 end
 
+-- :GetObjects allows you to get multiple objects to reuse at once.
 function Recycler:GetObjects(
 	objectCount: number,
 	createNewObjects: boolean?
-)
+): {[number]: any}
 	assert(
 		typeof(objectCount) == "number",
 		"You must specify an object count on :GetObjects!"
@@ -121,6 +126,9 @@ local function AddToGarbage(self, binId, ...)
 	end
 end
 
+-- :AddToGarbage adds the item you passed through it, on
+-- a table which is weak, it can be garbage collected as long
+-- as there's no extra references anywhere else.
 function Recycler:AddToGarbage(...)
 	if self._destroyed then
 		return self
@@ -165,7 +173,7 @@ function Recycler:OnDestroyed(
 end
 
 -- :OnNewObject sets the handler which will be called whenever there is no garbage to re-use,
--- Whatever it returns will be returned on :GetObject!
+-- whatever it returns will be returned on :GetObject!
 function Recycler:OnNewObject(
 	handler: () -> (any)
 )
